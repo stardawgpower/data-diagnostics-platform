@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data-diagnostics-platform"
+version = "0.1.0"
+description = "A modular platform for automated data diagnostics, exploratory analysis, and machine learning."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    "pandas",
+    "openpyxl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
