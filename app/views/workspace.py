@@ -52,7 +52,10 @@ if uploaded_file is not None:
 
     fingerprint = hashlib.sha256(payload).hexdigest()
 
-    dataset_changed = fingerprint != st.session_state.dataset_fingerprint
+    dataset_changed = (
+        fingerprint != st.session_state.dataset_fingerprint
+        or uploaded_file.name != st.session_state.dataset_name
+    )
 
     if dataset_changed:
         try:
@@ -134,15 +137,14 @@ st.dataframe(
 
 
 if working_data is not None:
-    changed = not (raw_data.shape == working_data.shape and raw_data.equals(working_data))
+    transformation_active = st.session_state.transformation_result is not None
 
-    if changed:
+    if transformation_active:
         st.info(
             "A transformed working dataset is active. The raw uploaded dataset remains unchanged."
         )
     else:
         st.caption("The working dataset currently matches the raw dataset.")
-
 
 st.subheader("Next Steps")
 

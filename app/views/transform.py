@@ -24,7 +24,7 @@ def build_sentinel_table(profile) -> pd.DataFrame:
 
         rows.append(
             {
-                "Apply": True,
+                "Apply": False,
                 "Column": issue.column,
                 "Value": issue.observed_value,
                 "Occurrences": (issue.affected_count or 0),
