@@ -333,3 +333,72 @@ def test_replacing_missing_with_missing_is_invalid() -> None:
             data,
             plan,
         )
+
+
+def test_duplicate_columns_in_operation_are_invalid() -> None:
+    data = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": [4, 5, 6],
+        }
+    )
+
+    plan = TransformationPlan(
+        operations=(
+            DropColumns(
+                columns=("a", "a"),
+            ),
+        )
+    )
+
+    with pytest.raises(InvalidTransformationError):
+        apply_transformation_plan(
+            data,
+            plan,
+        )
+
+
+def test_non_scalar_replacement_value_is_invalid() -> None:
+    data = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+        }
+    )
+
+    plan = TransformationPlan(
+        operations=(
+            ReplaceValueWithMissing(
+                columns=("a",),
+                value=[1, 2],
+            ),
+        )
+    )
+
+    with pytest.raises(InvalidTransformationError):
+        apply_transformation_plan(
+            data,
+            plan,
+        )
+
+
+def test_replace_value_unknown_column_raises_error() -> None:
+    data = pd.DataFrame(
+        {
+            "a": [1, -200, 3],
+        }
+    )
+
+    plan = TransformationPlan(
+        operations=(
+            ReplaceValueWithMissing(
+                columns=("missing_column",),
+                value=-200,
+            ),
+        )
+    )
+
+    with pytest.raises(UnknownColumnError):
+        apply_transformation_plan(
+            data,
+            plan,
+        )
