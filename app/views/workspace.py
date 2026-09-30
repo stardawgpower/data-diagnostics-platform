@@ -47,6 +47,15 @@ uploaded_file = st.file_uploader(
 )
 
 
+dataset_load_message = st.session_state.pop(
+    "dataset_load_message",
+    None,
+)
+
+if dataset_load_message is not None:
+    st.success(dataset_load_message)
+
+
 if uploaded_file is not None:
     payload = uploaded_file.getvalue()
 
@@ -84,7 +93,9 @@ if uploaded_file is not None:
         st.session_state.transformation_plan = None
         st.session_state.transformation_result = None
 
-        st.success(f"Loaded {uploaded_file.name}.")
+        st.session_state.dataset_load_message = f"Loaded {uploaded_file.name}."
+
+        st.rerun()
 
 
 raw_data = st.session_state.raw_data
