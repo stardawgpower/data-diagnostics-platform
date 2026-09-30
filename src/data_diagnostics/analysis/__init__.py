@@ -1,3 +1,17 @@
+from data_diagnostics.analysis.exploration import (
+    CategoricalFrequencySummary,
+    CategoryFrequency,
+    ColumnMissingness,
+    HistogramBin,
+    NumericDistribution,
+    NumericOutlierSummary,
+    NumericPairData,
+    prepare_numeric_pair,
+    summarize_categorical_frequencies,
+    summarize_missingness,
+    summarize_numeric_distribution,
+    summarize_numeric_outliers,
+)
 from data_diagnostics.analysis.profiling import (
     CategoricalSummary,
     ColumnProfile,
@@ -9,11 +23,23 @@ from data_diagnostics.analysis.profiling import (
 )
 
 __all__ = [
+    "CategoricalFrequencySummary",
     "CategoricalSummary",
+    "CategoryFrequency",
+    "ColumnMissingness",
     "ColumnProfile",
     "DatasetProfile",
     "DatetimeSummary",
+    "HistogramBin",
+    "NumericDistribution",
+    "NumericOutlierSummary",
+    "NumericPairData",
     "NumericSummary",
     "TimeSummary",
+    "prepare_numeric_pair",
     "profile_dataset",
+    "summarize_categorical_frequencies",
+    "summarize_missingness",
+    "summarize_numeric_distribution",
+    "summarize_numeric_outliers",
 ]

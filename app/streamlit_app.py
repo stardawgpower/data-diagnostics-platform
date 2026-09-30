@@ -44,11 +44,19 @@ transform_page = st.Page(
 )
 
 
+explore_page = st.Page(
+    "views/explore.py",
+    title="Explore",
+    icon=":material/query_stats:",
+)
+
+
 page = st.navigation(
     [
         workspace_page,
         profile_page,
         transform_page,
+        explore_page,
     ],
     position="top",
 )
