@@ -140,6 +140,68 @@ def test_profile_datetime_string_column() -> None:
     assert column.datetime.latest == pd.Timestamp("2026-02-03")
 
 
+def test_profile_day_first_datetime_uses_inferred_format() -> None:
+    data = pd.DataFrame(
+        {
+            "Date": [
+                "10/03/2004",
+                "13/03/2004",
+                "04/04/2005",
+            ]
+        }
+    )
+
+    profile = profile_dataset(data)
+    column = _profiles_by_name(profile)["Date"]
+
+    assert column.schema.temporal_format == "%d/%m/%Y"
+    assert column.datetime is not None
+    assert column.datetime.earliest == pd.Timestamp("2004-03-10")
+    assert column.datetime.latest == pd.Timestamp("2005-04-04")
+
+
+def test_profile_time_only_column() -> None:
+    data = pd.DataFrame(
+        {
+            "Time": [
+                "18.00.00",
+                "01.00.00",
+                "23.00.00",
+            ]
+        }
+    )
+
+    profile = profile_dataset(data)
+    column = _profiles_by_name(profile)["Time"]
+
+    assert column.schema.semantic_type == SemanticType.TIME
+    assert column.time is not None
+    assert column.time.count == 3
+    assert column.time.earliest.isoformat() == "01:00:00"
+    assert column.time.latest.isoformat() == "23:00:00"
+
+
+def test_profile_ambiguous_datetime_does_not_guess_range() -> None:
+    data = pd.DataFrame(
+        {
+            "Date": [
+                "01/02/2026",
+                "02/03/2026",
+                "03/04/2026",
+            ]
+        }
+    )
+
+    profile = profile_dataset(data)
+    column = _profiles_by_name(profile)["Date"]
+
+    assert column.schema.semantic_type == SemanticType.DATETIME
+    assert column.schema.temporal_format is None
+    assert column.datetime is not None
+    assert column.datetime.earliest is None
+    assert column.datetime.latest is None
+
+
 def test_profile_includes_quality_report() -> None:
     data = pd.DataFrame(
         {
@@ -169,6 +231,7 @@ def test_profile_all_missing_column_has_no_descriptive_summary() -> None:
     assert column.numeric is None
     assert column.categorical is None
     assert column.datetime is None
+    assert column.time is None
 
 
 def test_profile_does_not_modify_dataframe() -> None:

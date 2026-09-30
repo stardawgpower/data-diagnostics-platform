@@ -79,3 +79,46 @@ def test_filename_required_for_unnamed_file_object() -> None:
 
     with pytest.raises(DatasetReadError):
         read_dataset(source)
+
+
+def test_read_semicolon_csv_with_decimal_comma() -> None:
+    source = BytesIO(
+        b"Date;Time;CO(GT);T;RH\n"
+        b"10/03/2004;18.00.00;2,6;13,6;48,9\n"
+        b"10/03/2004;19.00.00;2,0;13,3;47,7\n"
+    )
+
+    data = read_dataset(
+        source,
+        filename="air_quality.csv",
+    )
+
+    assert data.shape == (2, 5)
+
+    assert data.columns.tolist() == [
+        "Date",
+        "Time",
+        "CO(GT)",
+        "T",
+        "RH",
+    ]
+
+    assert data.loc[0, "CO(GT)"] == pytest.approx(2.6)
+    assert data.loc[0, "T"] == pytest.approx(13.6)
+    assert data.loc[0, "RH"] == pytest.approx(48.9)
+
+
+def test_read_semicolon_csv_preserves_trailing_empty_fields() -> None:
+    source = BytesIO(b"Date;Time;CO(GT);;\n10/03/2004;18.00.00;2,6;;\n10/03/2004;19.00.00;2,0;;\n")
+
+    data = read_dataset(
+        source,
+        filename="air_quality.csv",
+    )
+
+    assert data.shape == (2, 5)
+
+    assert data["CO(GT)"].tolist() == pytest.approx([2.6, 2.0])
+
+    assert data.iloc[:, -1].isna().all()
+    assert data.iloc[:, -2].isna().all()

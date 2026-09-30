@@ -4,6 +4,7 @@ from data_diagnostics.analysis.profiling import (
     DatasetProfile,
     DatetimeSummary,
     NumericSummary,
+    TimeSummary,
     profile_dataset,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "DatasetProfile",
     "DatetimeSummary",
     "NumericSummary",
+    "TimeSummary",
     "profile_dataset",
 ]

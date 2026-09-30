@@ -6,8 +6,6 @@ import pandas as pd
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
-    is_float_dtype,
-    is_integer_dtype,
     is_numeric_dtype,
     is_object_dtype,
     is_string_dtype,
@@ -19,6 +17,7 @@ class SemanticType(str, Enum):
 
     IDENTIFIER = "identifier"
     DATETIME = "datetime"
+    TIME = "time"
     BINARY = "binary"
     CATEGORICAL = "categorical"
     NUMERIC_DISCRETE = "numeric_discrete"
@@ -40,6 +39,7 @@ class ColumnSchema:
     unique_ratio: float
     confidence: float
     reason: str
+    temporal_format: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,9 +56,24 @@ _IDENTIFIER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-_DATETIME_NAME_PATTERN = re.compile(
-    r"(date|time|timestamp|created|updated|datetime|dob)",
-    re.IGNORECASE,
+_DATETIME_FORMATS = (
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%m/%d/%Y",
+    "%Y/%m/%d",
+    "%d-%m-%Y",
+    "%m-%d-%Y",
+    "%Y-%m-%d %H:%M:%S",
+    "%d/%m/%Y %H:%M:%S",
+    "%m/%d/%Y %H:%M:%S",
+    "%Y-%m-%dT%H:%M:%S",
+)
+
+_TIME_FORMATS = (
+    "%H:%M:%S",
+    "%H.%M.%S",
+    "%H:%M",
+    "%H.%M",
 )
 
 
@@ -68,51 +83,105 @@ def _looks_like_identifier(name: str, unique_ratio: float) -> bool:
     return bool(_IDENTIFIER_PATTERN.search(name)) and unique_ratio >= 0.90
 
 
-def _looks_like_datetime_values(series: pd.Series, name: str) -> bool:
-    """Return whether string values are plausible datetime candidates."""
+def _best_temporal_format(
+    series: pd.Series,
+    formats: tuple[str, ...],
+) -> tuple[str | None, float, bool]:
+    """
+    Find the strict temporal format that parses the largest share of values.
+
+    Returns
+    -------
+    tuple
+        Best format, parse ratio, and whether the result is ambiguous.
+    """
 
     non_null = series.dropna()
 
     if non_null.empty:
-        return False
+        return None, 0.0, False
 
-    if _DATETIME_NAME_PATTERN.search(name):
-        return True
+    sample = non_null.astype("string").head(500)
+    scores: list[tuple[str, float]] = []
 
-    sample = non_null.astype("string").head(200)
+    for format_string in formats:
+        parsed = pd.to_datetime(
+            sample,
+            format=format_string,
+            errors="coerce",
+        )
+        scores.append((format_string, float(parsed.notna().mean())))
 
-    date_like_ratio = sample.str.contains(
-        r"[-/:T]",
-        regex=True,
-        na=False,
-    ).mean()
+    best_ratio = max(score for _, score in scores)
 
-    return bool(date_like_ratio >= 0.50)
+    if best_ratio == 0:
+        return None, 0.0, False
+
+    best_formats = [format_string for format_string, score in scores if score == best_ratio]
+
+    if len(best_formats) > 1:
+        return None, best_ratio, True
+
+    return best_formats[0], best_ratio, False
 
 
-def _datetime_parse_ratio(series: pd.Series) -> float:
-    """Calculate the proportion of non-null values parseable as datetimes."""
+def _infer_temporal_string(
+    series: pd.Series,
+) -> tuple[SemanticType | None, float, str, str | None]:
+    """Infer a strict date/datetime or time-only representation."""
 
-    non_null = series.dropna()
-
-    if non_null.empty:
-        return 0.0
-
-    sample = non_null.astype("string").head(200)
-
-    parsed = pd.to_datetime(
-        sample,
-        errors="coerce",
-        format="mixed",
+    time_format, time_ratio, time_ambiguous = _best_temporal_format(
+        series,
+        _TIME_FORMATS,
     )
 
-    return float(parsed.notna().mean())
+    if time_ratio >= 0.80:
+        if time_ambiguous:
+            return (
+                SemanticType.TIME,
+                0.60,
+                "Values appear to represent times, but the format is ambiguous.",
+                None,
+            )
+
+        return (
+            SemanticType.TIME,
+            time_ratio,
+            f"String values match time format {time_format}.",
+            time_format,
+        )
+
+    datetime_format, datetime_ratio, datetime_ambiguous = _best_temporal_format(
+        series,
+        _DATETIME_FORMATS,
+    )
+
+    if datetime_ratio >= 0.80:
+        if datetime_ambiguous:
+            return (
+                SemanticType.DATETIME,
+                0.60,
+                (
+                    "Values appear to represent dates, but day/month order "
+                    "is ambiguous and requires confirmation."
+                ),
+                None,
+            )
+
+        return (
+            SemanticType.DATETIME,
+            datetime_ratio,
+            f"String values match datetime format {datetime_format}.",
+            datetime_format,
+        )
+
+    return None, 0.0, "", None
 
 
-def _is_integer_like_float(series: pd.Series) -> bool:
-    """Return whether every non-null floating-point value is integer-like."""
+def _is_integer_like_numeric(series: pd.Series) -> bool:
+    """Return whether every non-null numeric value is integer-like."""
 
-    non_null = series.dropna()
+    non_null = pd.to_numeric(series, errors="coerce").dropna()
 
     if non_null.empty:
         return False
@@ -120,12 +189,48 @@ def _is_integer_like_float(series: pd.Series) -> bool:
     return bool(((non_null % 1) == 0).all())
 
 
+def _infer_numeric_semantic_type(
+    series: pd.Series,
+    unique_count: int,
+    unique_ratio: float,
+) -> tuple[SemanticType, float, str, str | None]:
+    """Infer whether a numeric column is better treated as discrete or continuous."""
+
+    if not _is_integer_like_numeric(series):
+        return (
+            SemanticType.NUMERIC_CONTINUOUS,
+            0.90,
+            "Numeric column contains fractional values.",
+            None,
+        )
+
+    low_cardinality = unique_count <= 20 or (unique_count <= 50 and unique_ratio <= 0.20)
+
+    if low_cardinality:
+        return (
+            SemanticType.NUMERIC_DISCRETE,
+            0.85,
+            "Integer-like numeric column has relatively low cardinality.",
+            None,
+        )
+
+    return (
+        SemanticType.NUMERIC_CONTINUOUS,
+        0.80,
+        (
+            "Integer-like numeric column has high cardinality and is treated "
+            "as continuous for analysis."
+        ),
+        None,
+    )
+
+
 def _infer_semantic_type(
     series: pd.Series,
     name: str,
     unique_count: int,
     unique_ratio: float,
-) -> tuple[SemanticType, float, str]:
+) -> tuple[SemanticType, float, str, str | None]:
     """Infer a semantic type for a single column."""
 
     non_null = series.dropna()
@@ -135,6 +240,7 @@ def _infer_semantic_type(
             SemanticType.UNKNOWN,
             1.0,
             "Column contains only missing values.",
+            None,
         )
 
     if is_datetime64_any_dtype(series.dtype):
@@ -142,6 +248,7 @@ def _infer_semantic_type(
             SemanticType.DATETIME,
             1.0,
             "Physical dtype is datetime.",
+            None,
         )
 
     if is_bool_dtype(series.dtype):
@@ -149,6 +256,7 @@ def _infer_semantic_type(
             SemanticType.BINARY,
             1.0,
             "Physical dtype is boolean.",
+            None,
         )
 
     if _looks_like_identifier(name, unique_ratio):
@@ -156,34 +264,7 @@ def _infer_semantic_type(
             SemanticType.IDENTIFIER,
             0.95,
             "Column name suggests an identifier and values are highly unique.",
-        )
-
-    if unique_count == 2:
-        return (
-            SemanticType.BINARY,
-            0.95,
-            "Column contains exactly two distinct non-null values.",
-        )
-
-    if is_numeric_dtype(series.dtype):
-        if is_integer_dtype(series.dtype):
-            return (
-                SemanticType.NUMERIC_DISCRETE,
-                0.90,
-                "Physical dtype is integer.",
-            )
-
-        if is_float_dtype(series.dtype) and _is_integer_like_float(series):
-            return (
-                SemanticType.NUMERIC_DISCRETE,
-                0.85,
-                "Floating-point values are integer-like.",
-            )
-
-        return (
-            SemanticType.NUMERIC_CONTINUOUS,
-            0.90,
-            "Column contains numeric continuous values.",
+            None,
         )
 
     is_textual = (
@@ -193,21 +274,33 @@ def _infer_semantic_type(
     )
 
     if is_textual:
-        if _looks_like_datetime_values(series, name):
-            parse_ratio = _datetime_parse_ratio(series)
+        temporal_type, confidence, reason, temporal_format = _infer_temporal_string(series)
 
-            if parse_ratio >= 0.80:
-                return (
-                    SemanticType.DATETIME,
-                    parse_ratio,
-                    "String values are consistently parseable as datetimes.",
-                )
+        if temporal_type is not None:
+            return temporal_type, confidence, reason, temporal_format
 
+    if unique_count == 2:
+        return (
+            SemanticType.BINARY,
+            0.95,
+            "Column contains exactly two distinct non-null values.",
+            None,
+        )
+
+    if is_numeric_dtype(series.dtype):
+        return _infer_numeric_semantic_type(
+            series,
+            unique_count,
+            unique_ratio,
+        )
+
+    if is_textual:
         if isinstance(series.dtype, pd.CategoricalDtype):
             return (
                 SemanticType.CATEGORICAL,
                 0.95,
                 "Physical dtype is categorical.",
+                None,
             )
 
         low_cardinality = (unique_count <= 20 and unique_ratio < 0.90) or (
@@ -219,18 +312,21 @@ def _infer_semantic_type(
                 SemanticType.CATEGORICAL,
                 0.85,
                 "String column has relatively low cardinality.",
+                None,
             )
 
         return (
             SemanticType.TEXT,
             0.75,
             "String column has relatively high cardinality.",
+            None,
         )
 
     return (
         SemanticType.UNKNOWN,
         0.50,
         "No supported semantic-type rule matched the column.",
+        None,
     )
 
 
@@ -254,7 +350,7 @@ def infer_schema(data: pd.DataFrame) -> DatasetSchema:
         missing_ratio = missing_count / row_count if row_count else 0.0
         unique_ratio = unique_count / non_null_count if non_null_count else 0.0
 
-        semantic_type, confidence, reason = _infer_semantic_type(
+        semantic_type, confidence, reason, temporal_format = _infer_semantic_type(
             series=series,
             name=str(column_name),
             unique_count=unique_count,
@@ -272,6 +368,7 @@ def infer_schema(data: pd.DataFrame) -> DatasetSchema:
                 unique_ratio=unique_ratio,
                 confidence=confidence,
                 reason=reason,
+                temporal_format=temporal_format,
             )
         )
 

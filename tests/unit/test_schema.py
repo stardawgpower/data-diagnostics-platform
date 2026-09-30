@@ -71,9 +71,11 @@ def test_detect_datetime_string_column() -> None:
     )
 
     schema = infer_schema(data)
+    column = schema.columns[0]
 
-    assert schema.columns[0].semantic_type == SemanticType.DATETIME
-    assert schema.columns[0].confidence >= 0.80
+    assert column.semantic_type == SemanticType.DATETIME
+    assert column.confidence >= 0.80
+    assert column.temporal_format == "%Y-%m-%d"
 
 
 def test_detect_binary_numeric_column() -> None:
@@ -131,3 +133,88 @@ def test_schema_inference_does_not_modify_dataframe() -> None:
     infer_schema(data)
 
     pd.testing.assert_frame_equal(data, original)
+
+
+def test_compound_header_is_not_inferred_as_datetime() -> None:
+    data = pd.DataFrame(
+        {
+            "Date;Time;CO(GT);T;RH": [
+                "7578;;",
+                "7255;;",
+                "7502;;",
+            ]
+        }
+    )
+
+    schema = infer_schema(data)
+
+    assert schema.columns[0].semantic_type != SemanticType.DATETIME
+
+
+def test_detect_day_first_date_format() -> None:
+    data = pd.DataFrame(
+        {
+            "Date": [
+                "10/03/2004",
+                "13/03/2004",
+                "31/03/2004",
+            ]
+        }
+    )
+
+    schema = infer_schema(data)
+    column = schema.columns[0]
+
+    assert column.semantic_type == SemanticType.DATETIME
+    assert column.temporal_format == "%d/%m/%Y"
+    assert column.confidence == 1.0
+
+
+def test_detect_time_only_column() -> None:
+    data = pd.DataFrame(
+        {
+            "Time": [
+                "18.00.00",
+                "19.00.00",
+                "20.00.00",
+            ]
+        }
+    )
+
+    schema = infer_schema(data)
+    column = schema.columns[0]
+
+    assert column.semantic_type == SemanticType.TIME
+    assert column.temporal_format == "%H.%M.%S"
+    assert column.confidence == 1.0
+
+
+def test_ambiguous_date_order_has_lower_confidence() -> None:
+    data = pd.DataFrame(
+        {
+            "Date": [
+                "01/02/2026",
+                "02/03/2026",
+                "03/04/2026",
+            ]
+        }
+    )
+
+    schema = infer_schema(data)
+    column = schema.columns[0]
+
+    assert column.semantic_type == SemanticType.DATETIME
+    assert column.temporal_format is None
+    assert column.confidence < 0.80
+
+
+def test_high_cardinality_integer_like_numeric_is_continuous() -> None:
+    data = pd.DataFrame(
+        {
+            "sensor": [float(value) for value in range(100)],
+        }
+    )
+
+    schema = infer_schema(data)
+
+    assert schema.columns[0].semantic_type == SemanticType.NUMERIC_CONTINUOUS

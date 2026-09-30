@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -135,6 +136,88 @@ def test_quality_analysis_does_not_modify_dataframe() -> None:
     analyze_data_quality(data)
 
     pd.testing.assert_frame_equal(data, original)
+
+
+def test_empty_rows_are_not_counted_as_duplicate_data_rows() -> None:
+    data = pd.DataFrame(
+        {
+            "a": [1, 2, None, None],
+            "b": ["x", "y", None, None],
+        }
+    )
+
+    report = analyze_data_quality(data)
+
+    assert report.all_missing_row_count == 2
+    assert report.all_missing_row_ratio == pytest.approx(0.5)
+    assert report.duplicate_row_count == 0
+    assert QualityIssueCode.ALL_MISSING_ROWS in _issue_codes(report)
+
+
+def test_detect_structural_empty_column() -> None:
+    data = pd.DataFrame(
+        {
+            "value": [1, 2, 3],
+            "Unnamed: 2": [None, None, None],
+        }
+    )
+
+    report = analyze_data_quality(data)
+    issues = _issues_for_column(report, "Unnamed: 2")
+
+    assert any(issue.code == QualityIssueCode.STRUCTURAL_EMPTY_COLUMN for issue in issues)
+
+
+def test_detect_possible_numeric_sentinel() -> None:
+    data = pd.DataFrame(
+        {
+            "sensor": (
+                [-200.0] * 10
+                + [
+                    10.1,
+                    10.3,
+                    10.5,
+                    10.8,
+                    11.0,
+                    11.2,
+                    11.5,
+                    11.8,
+                    12.0,
+                    12.3,
+                ]
+            )
+        }
+    )
+
+    report = analyze_data_quality(data)
+    issues = _issues_for_column(report, "sensor")
+
+    sentinel_issues = [
+        issue for issue in issues if issue.code == QualityIssueCode.POSSIBLE_SENTINEL
+    ]
+
+    assert len(sentinel_issues) == 1
+    assert sentinel_issues[0].observed_value == -200.0
+    assert sentinel_issues[0].affected_count == 10
+    assert sentinel_issues[0].affected_ratio == pytest.approx(0.5)
+
+
+def test_detect_non_finite_numeric_values() -> None:
+    data = pd.DataFrame(
+        {
+            "value": [1.0, 2.0, np.inf, -np.inf, 5.0],
+        }
+    )
+
+    report = analyze_data_quality(data)
+    issues = _issues_for_column(report, "value")
+
+    non_finite_issues = [
+        issue for issue in issues if issue.code == QualityIssueCode.NON_FINITE_VALUES
+    ]
+
+    assert len(non_finite_issues) == 1
+    assert non_finite_issues[0].affected_count == 2
 
 
 @pytest.mark.parametrize(

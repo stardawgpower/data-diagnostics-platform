@@ -10,8 +10,10 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
+    "numpy",
     "pandas",
     "openpyxl",
+    "streamlit",
 ]
 
 [project.optional-dependencies]
@@ -29,3 +31,6 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.isort]
+known-first-party = ["data_diagnostics"]

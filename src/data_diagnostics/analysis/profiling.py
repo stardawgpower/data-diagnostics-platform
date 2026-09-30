@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from datetime import time
 
+import numpy as np
 import pandas as pd
 
 from data_diagnostics.ingestion import (
@@ -46,6 +48,15 @@ class DatetimeSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class TimeSummary:
+    """Descriptive statistics for a time-only column."""
+
+    count: int
+    earliest: time | None
+    latest: time | None
+
+
+@dataclass(frozen=True, slots=True)
 class ColumnProfile:
     """Combined schema and descriptive information for one column."""
 
@@ -53,6 +64,7 @@ class ColumnProfile:
     numeric: NumericSummary | None = None
     categorical: CategoricalSummary | None = None
     datetime: DatetimeSummary | None = None
+    time: TimeSummary | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,9 +88,10 @@ def _optional_float(value: object) -> float | None:
 
 
 def _build_numeric_summary(series: pd.Series) -> NumericSummary:
-    """Build descriptive statistics for a numeric series."""
+    """Build descriptive statistics for finite numeric values."""
 
-    non_null = series.dropna()
+    numeric = pd.to_numeric(series, errors="coerce")
+    non_null = numeric[numeric.notna() & np.isfinite(numeric)]
 
     return NumericSummary(
         count=int(non_null.count()),
@@ -111,17 +124,26 @@ def _build_categorical_summary(series: pd.Series) -> CategoricalSummary:
     )
 
 
-def _build_datetime_summary(series: pd.Series) -> DatetimeSummary:
-    """Build descriptive statistics for a datetime-like series."""
+def _build_datetime_summary(
+    series: pd.Series,
+    temporal_format: str | None,
+) -> DatetimeSummary:
+    """Build descriptive statistics for a datetime-like series without guessing formats."""
 
     if pd.api.types.is_datetime64_any_dtype(series.dtype):
-        parsed = series.dropna()
-    else:
+        parsed = pd.to_datetime(series, errors="coerce").dropna()
+    elif temporal_format is not None:
         parsed = pd.to_datetime(
             series,
+            format=temporal_format,
             errors="coerce",
-            format="mixed",
         ).dropna()
+    else:
+        return DatetimeSummary(
+            count=int(series.notna().sum()),
+            earliest=None,
+            latest=None,
+        )
 
     if parsed.empty:
         earliest = None
@@ -131,6 +153,39 @@ def _build_datetime_summary(series: pd.Series) -> DatetimeSummary:
         latest = pd.Timestamp(parsed.max())
 
     return DatetimeSummary(
+        count=int(parsed.count()),
+        earliest=earliest,
+        latest=latest,
+    )
+
+
+def _build_time_summary(
+    series: pd.Series,
+    temporal_format: str | None,
+) -> TimeSummary:
+    """Build descriptive statistics for a time-only series without guessing formats."""
+
+    if temporal_format is None:
+        return TimeSummary(
+            count=int(series.notna().sum()),
+            earliest=None,
+            latest=None,
+        )
+
+    parsed = pd.to_datetime(
+        series,
+        format=temporal_format,
+        errors="coerce",
+    ).dropna()
+
+    if parsed.empty:
+        earliest = None
+        latest = None
+    else:
+        earliest = parsed.min().time()
+        latest = parsed.max().time()
+
+    return TimeSummary(
         count=int(parsed.count()),
         earliest=earliest,
         latest=latest,
@@ -158,7 +213,19 @@ def _profile_column(
     if semantic_type == SemanticType.DATETIME:
         return ColumnProfile(
             schema=column_schema,
-            datetime=_build_datetime_summary(series),
+            datetime=_build_datetime_summary(
+                series,
+                column_schema.temporal_format,
+            ),
+        )
+
+    if semantic_type == SemanticType.TIME:
+        return ColumnProfile(
+            schema=column_schema,
+            time=_build_time_summary(
+                series,
+                column_schema.temporal_format,
+            ),
         )
 
     if semantic_type in {
