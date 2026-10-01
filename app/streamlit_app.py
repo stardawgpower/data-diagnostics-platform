@@ -67,6 +67,12 @@ pivot_analysis_page = st.Page(
     icon=":material/pivot_table_chart:",
 )
 
+statistical_analysis_page = st.Page(
+    "views/statistical_analysis.py",
+    title="Statistical Analysis",
+    icon=":material/functions:",
+)
+
 page = st.navigation(
     [
         workspace_page,
@@ -76,6 +82,7 @@ page = st.navigation(
         relationships_page,
         time_analysis_page,
         pivot_analysis_page,
+        statistical_analysis_page,
     ],
     position="top",
 )
