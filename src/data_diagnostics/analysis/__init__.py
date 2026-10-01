@@ -12,6 +12,13 @@ from data_diagnostics.analysis.exploration import (
     summarize_numeric_distribution,
     summarize_numeric_outliers,
 )
+from data_diagnostics.analysis.pivot import (
+    PivotAggregation,
+    PivotCardinality,
+    PivotResult,
+    build_pivot_table,
+    estimate_pivot_cardinality,
+)
 from data_diagnostics.analysis.profiling import (
     CategoricalSummary,
     ColumnProfile,
@@ -64,6 +71,9 @@ __all__ = [
     "NumericPairData",
     "NumericRelationship",
     "NumericSummary",
+    "PivotAggregation",
+    "PivotCardinality",
+    "PivotResult",
     "RelationshipStatus",
     "TemporalAggregation",
     "TemporalAggregationResult",
@@ -78,7 +88,9 @@ __all__ = [
     "analyze_numeric_relationship",
     "analyze_temporal_sampling",
     "build_correlation_matrix",
+    "build_pivot_table",
     "detect_time_gaps",
+    "estimate_pivot_cardinality",
     "prepare_numeric_pair",
     "prepare_temporal_axis",
     "prepare_temporal_numeric_series",
