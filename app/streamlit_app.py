@@ -43,13 +43,17 @@ transform_page = st.Page(
     icon=":material/tune:",
 )
 
-
 explore_page = st.Page(
     "views/explore.py",
     title="Explore",
     icon=":material/query_stats:",
 )
 
+relationships_page = st.Page(
+    "views/relationships.py",
+    title="Relationships",
+    icon=":material/hub:",
+)
 
 page = st.navigation(
     [
@@ -57,6 +61,7 @@ page = st.navigation(
         profile_page,
         transform_page,
         explore_page,
+        relationships_page,
     ],
     position="top",
 )
