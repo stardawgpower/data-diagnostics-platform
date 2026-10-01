@@ -55,6 +55,12 @@ relationships_page = st.Page(
     icon=":material/hub:",
 )
 
+time_analysis_page = st.Page(
+    "views/time_analysis.py",
+    title="Time Analysis",
+    icon=":material/schedule:",
+)
+
 page = st.navigation(
     [
         workspace_page,
@@ -62,6 +68,7 @@ page = st.navigation(
         transform_page,
         explore_page,
         relationships_page,
+        time_analysis_page,
     ],
     position="top",
 )
