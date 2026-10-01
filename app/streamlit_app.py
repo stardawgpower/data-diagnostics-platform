@@ -61,6 +61,12 @@ time_analysis_page = st.Page(
     icon=":material/schedule:",
 )
 
+pivot_analysis_page = st.Page(
+    "views/pivot_analysis.py",
+    title="Pivot Analysis",
+    icon=":material/pivot_table_chart:",
+)
+
 page = st.navigation(
     [
         workspace_page,
@@ -69,10 +75,10 @@ page = st.navigation(
         explore_page,
         relationships_page,
         time_analysis_page,
+        pivot_analysis_page,
     ],
     position="top",
 )
-
 
 with st.sidebar:
     st.header("Workspace")
