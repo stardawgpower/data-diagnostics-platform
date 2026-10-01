@@ -38,6 +38,17 @@ from data_diagnostics.analysis.relationships import (
     build_correlation_matrix,
     strongest_correlations,
 )
+from data_diagnostics.analysis.statistical import (
+    CategoricalAssociation,
+    MultiGroupComparison,
+    MultiGroupMethod,
+    NumericGroupSummary,
+    TwoGroupComparison,
+    TwoGroupMethod,
+    analyze_categorical_association,
+    compare_multiple_numeric_groups,
+    compare_two_numeric_groups,
+)
 from data_diagnostics.analysis.time_analysis import (
     TemporalAggregation,
     TemporalAggregationResult,
@@ -55,6 +66,7 @@ from data_diagnostics.analysis.time_analysis import (
 )
 
 __all__ = [
+    "CategoricalAssociation",
     "CategoricalFrequencySummary",
     "CategoricalSummary",
     "CategoryFrequency",
@@ -66,7 +78,10 @@ __all__ = [
     "DatasetProfile",
     "DatetimeSummary",
     "HistogramBin",
+    "MultiGroupComparison",
+    "MultiGroupMethod",
     "NumericDistribution",
+    "NumericGroupSummary",
     "NumericOutlierSummary",
     "NumericPairData",
     "NumericRelationship",
@@ -84,11 +99,16 @@ __all__ = [
     "TemporalNumericSeries",
     "TemporalSamplingSummary",
     "TimeSummary",
+    "TwoGroupComparison",
+    "TwoGroupMethod",
     "aggregate_temporal_numeric_series",
+    "analyze_categorical_association",
     "analyze_numeric_relationship",
     "analyze_temporal_sampling",
     "build_correlation_matrix",
     "build_pivot_table",
+    "compare_multiple_numeric_groups",
+    "compare_two_numeric_groups",
     "detect_time_gaps",
     "estimate_pivot_cardinality",
     "prepare_numeric_pair",
